@@ -1,0 +1,71 @@
+---
+- name: Add helm repository
+  kubernetes.core.helm_repository:
+    context: "{{ k8s_context | default(omit) }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+    name: "{{ chart_repository_name }}"
+    password: "{{ helm_repo_pass | default(omit) }}"
+    state: present
+    url: "{{ helm_repo_url }}"
+    username: "{{ helm_repo_user | default(omit) }}"
+
+- name: Create Kubernetes namespace
+  kubernetes.core.k8s:
+    api_version: v1
+    context: "{{ k8s_context | default(omit) }}"
+    kind: namespace
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+    name: "{{ k8s_namespace }}"
+    state: present
+
+- name: Download custom resource definitions
+  ansible.builtin.uri:
+    return_content: true
+    url: "{{ certmanager_crd_url }}"
+  register: certmanager_crd
+
+- name: Configure custom resource definitions
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ k8s_context | default(omit) }}"
+    definition: "{{ certmanager_crd.content }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+
+- name: Deploy helm chart
+  kubernetes.core.helm:
+    chart_ref: "{{ chart_ref }}"
+    chart_version: "{{ chart_version }}"
+    context: "{{ k8s_context | default(omit) }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+    name: "{{ certmanager_name }}"
+    namespace: "{{ k8s_namespace }}"
+    update_repo_cache: true
+    values: "{{ lookup('template', 'values.yaml.j2') | from_yaml }}"
+    wait: true
+    state: absent
+
+- name: Configure self-signing certificate issuer
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ k8s_context | default(omit) }}"
+    definition: "{{ lookup('template', 'issuer-selfsign.yaml.j2') | from_yaml }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+  when: certmanager_issuer_selfsign
+
+- name: Determine if acme certificate issuer is needed
+  when: certmanager_issuer_acme
+  block:
+    - name: Configure DNS01 API token
+      kubernetes.core.k8s:
+        state: present
+        context: "{{ k8s_context | default(omit) }}"
+        definition: "{{ lookup('template', 'dns-acme-secret.yaml.j2') | from_yaml }}"
+        kubeconfig: "{{ k8s_config | default(omit) }}"
+      when: certmanager_acme_challenge == 'dns'
+
+    - name: Configure acme certificate issuer
+      kubernetes.core.k8s:
+        state: present
+        context: "{{ k8s_context | default(omit) }}"
+        definition: "{{ lookup('template', 'issuer-acme.yaml.j2') | from_yaml }}"
+        kubeconfig: "{{ k8s_config | default(omit) }}"

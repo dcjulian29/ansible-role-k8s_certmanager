@@ -1,0 +1,26 @@
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ certmanager_issuer_acme_name }}
+spec:
+  acme:
+    email: {{ certmanager_acme_email }}
+    server: {{ certmanager_acme_server }}
+    privateKeySecretRef:
+      name: {{ certmanager_issuer_acme_key_name }}
+    solvers:
+{% if certmanager_acme_challenge == 'http'  %}
+    - http01:
+        ingress:
+          ingressClassName: {{ certmanager_acme_http_ingressclass }}
+{% elif certmanager_acme_challenge == 'tls' %}
+    # TODO
+{% elif certmanager_acme_challenge == 'dns' %}
+    - dns01:
+        {{ certmanager_acme_dns_provider }}:
+          email: {{ certmanager_acme_dns_token_user }}
+          serviceAccountSecretRef:
+            name: prod-clouddns-svc-acct-secret
+            key: service-account.json
+{% endif %}

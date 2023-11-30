@@ -1,6 +1,9 @@
 {
   "cSpell.words": [
+    "crds",
     "dcjulian",
+    "traefik",
     "unmark"
-  ]
+  ],
+  "ansible.python.interpreterPath": "/bin/python3"
 }

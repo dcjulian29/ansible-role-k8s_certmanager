@@ -1,0 +1,15 @@
+---
+global:
+  logLevel: {{ certmanager_log_level }}
+installCRDs: false
+replicaCount: {{ certmanager_replicas }}
+dns01RecursiveNameservers: "{{ certmanager_dns_recursive | join(',') }}"
+dns01RecursiveNameserversOnly: {{ certmanager_dns_recursive_only }}
+deploymentAnnotations: {{ certmanager_deploy_annotations if certmanager_deploy_annotations | length > 0 else {} }}
+podAnnotations: {{ certmanager_deploy_annotations if certmanager_deploy_annotations | length > 0 else {} }}
+podLabels: {{ certmanager_pod_labels if certmanager_pod_labels | length > 0 else {} }}
+serviceAnnotations: {{ certmanager_service_annotations if certmanager_service_annotations | length > 0 else {} }}
+serviceLabels: {{ certmanager_service_labels if certmanager_service_labels | length > 0 else {} }}
+podDnsPolicy: {{ certmanager_pod_dns_policy }}
+podDnsConfig:
+  nameservers: {{ certmanager_pod_dns_servers | to_json }}
