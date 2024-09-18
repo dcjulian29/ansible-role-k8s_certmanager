@@ -1,0 +1,19 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ item.name }}
+  namespace: {{ item.namespace | default('default')  }}
+spec:
+  secretName: {{ item.name }}-tls
+  privateKey:
+    rotationPolicy: Always
+  commonName: {{ item.dns[0] }}
+  dnsNames: {{ item.dns | to_yaml }}
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  issuerRef:
+    name: {{ item.issuer }}
+    kind: ClusterIssuer

@@ -1,45 +1,60 @@
 ---
-acme_staging: https://acme-staging-v02.api.letsencrypt.org/directory
-acme_production: https://acme-v02.api.letsencrypt.org/directory
-certmanager_acme_challenge: http    # dns, tls, or http
-certmanager_acme_dns_provider: cloudflare
-certmanager_acme_dns_secret_name: cloudflare-token-secret
-certmanager_acme_dns_token_key: 123abc
-certmanager_acme_dns_token_name: cloudflare-token
-certmanager_acme_dns_token_user: "{{ certmanager_acme_email }}"
+certmanager_acme_challenge: http    # dns, tls, http, or custom
+certmanager_acme_dns_secrets:
+  - name: cloudflare-api-token-secret
+    key: 123abc
 certmanager_acme_email: user@example.com
-certmanager_acme_http_ingressclass: traefik-external
-certmanager_acme_server: "{{ acme_staging }}"
+certmanager_acme_issuers:
+  - name: letsencrypt-staging
+    email: "{{ certmanager_acme_email }}"
+    secret_name: cloudflare-api-token-secret
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+  - name: letsencrypt-production
+    email: "{{ certmanager_acme_email }}"
+    secret_name: cloudflare-api-token-secret-p
+    server: https://acme-v02.api.letsencrypt.org/directory
+  # - name: letsencrypt-azure
+  #   email: "{{ certmanager_acme_email }}"
+  #   server: https://acme-v02.api.letsencrypt.org/directory
+  #   solver:
+  #     dns01:
+  #       azureDNS:
+  #         resourceGroupName: $AZURE_DEFAULTS_GROUP
+  #         subscriptionID: $AZURE_SUBSCRIPTION_ID
+  #         hostedZoneName: $DOMAIN_NAME
+  #         environment: AzurePublicCloud
+  #         managedIdentity:
+  #           clientID: $USER_ASSIGNED_IDENTITY_CLIENT_ID
+certmanager_certificates:
+  - name: example-www
+    namespace: example-service
+    dns:
+      - example.com
+      - www.example.com
+    issuer: "{{ certmanager_issuer_selfsign_name }}"
+certmanager_chart_ref: jetstack/cert-manager
+certmanager_chart_repository_name: jetstack
+certmanager_chart_version: "1.15.3"
 certmanager_crd_file: cert-manager.crds.yaml
 certmanager_crd_url: "{{ certmanager_crd_url_base }}/{{ certmanager_crd_url_version }}"
 certmanager_crd_url_base: "https://github.com/cert-manager/cert-manager/releases/download/"
-certmanager_crd_url_version: "v{{ chart_version }}/{{ certmanager_crd_file }}"
+certmanager_crd_url_version: "v{{ certmanager_chart_version }}/{{ certmanager_crd_file }}"
 certmanager_deploy_annotations: []
 certmanager_deploy_labels: []
-certmanager_dns_recursive:
-  - 1.1.1.1
-  - 9.9.9.9
-certmanager_dns_recursive_only: true
-certmanager_issuer_acme: false
-certmanager_issuer_acme_key_name: acme-issuer-account-key
-certmanager_issuer_acme_name: letsencrypt
+certmanager_external_certauth: ""
+certmanager_helm_repo_pass: "{{ undef() }}"
+certmanager_helm_repo_url: https://charts.jetstack.io
+certmanager_helm_repo_user: "{{ undef() }}"
+certmanager_ingress_class: traefik
 certmanager_issuer_selfsign: true
-certmanager_issuer_selfsign_name: selfsigned
+certmanager_issuer_selfsign_name: CertManager-SelfSigned
 certmanager_log_level: 2    # Range of 0 - 6 with 6 being the most verbose.
 certmanager_name: "{{ certmanager_namespace }}"
+certmanager_namespace: cert-manager
 certmanager_pod_annotations: []
-certmanager_pod_dns_policy: None
-certmanager_pod_dns_servers: "{{ certmanager_dns_recursive }}"
 certmanager_pod_labels: []
 certmanager_service_annotations: []
 certmanager_service_labels: []
 certmanager_replicas: 1
-chart_ref: jetstack/cert-manager
-chart_repository_name: jetstack
-chart_version: "1.13.2"
-helm_repo_pass: "{{ undef() }}"
-helm_repo_url: https://charts.jetstack.io
-helm_repo_user: "{{ undef() }}"
 k8s_config: "{{ lookup('ansible.builtin.env', 'K8S_AUTH_KUBECONFIG', default=undef()) }}"
 k8s_context: "{{ lookup('ansible.builtin.env', 'K8S_AUTH_CONTEXT', default=undef()) }}"
-certmanager_namespace: cert-manager

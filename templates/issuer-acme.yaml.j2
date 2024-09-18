@@ -2,25 +2,31 @@
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: {{ certmanager_issuer_acme_name }}
+  name: {{ item.name }}
+  namespace: default
 spec:
   acme:
-    email: {{ certmanager_acme_email }}
-    server: {{ certmanager_acme_server }}
+    email: {{ item.email }}
+    server: {{ item.server }}
+{% if certmanager_external_certauth | length > 0 %}
+    caBundle: {{ ca_cert.content | b64encode }}
+{% endif %}
     privateKeySecretRef:
-      name: {{ certmanager_issuer_acme_key_name }}
+      name: {{ item.name }}-secret
     solvers:
 {% if certmanager_acme_challenge == 'http'  %}
     - http01:
         ingress:
-          ingressClassName: {{ certmanager_acme_http_ingressclass }}
+          class: {{ certmanager_ingress_class }}
 {% elif certmanager_acme_challenge == 'tls' %}
     # TODO
 {% elif certmanager_acme_challenge == 'dns' %}
     - dns01:
-        {{ certmanager_acme_dns_provider }}:
-          email: {{ certmanager_acme_dns_token_user }}
-          serviceAccountSecretRef:
-            name: prod-clouddns-svc-acct-secret
-            key: service-account.json
+        {{ item.name }}:
+          email: {{ item.email }}
+          apiTokenSecretRef:
+            name: {{ item.secret_name }}
+            key: api-token
+{% elif certmanager_acme_challenge == 'custom' %}
+    - {{ item.solver | to_yaml }}
 {% endif %}

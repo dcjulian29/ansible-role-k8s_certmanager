@@ -3,11 +3,11 @@
   kubernetes.core.helm_repository:
     context: "{{ k8s_context | default(omit) }}"
     kubeconfig: "{{ k8s_config | default(omit) }}"
-    name: "{{ chart_repository_name }}"
-    password: "{{ helm_repo_pass | default(omit) }}"
+    name: "{{ certmanager_chart_repository_name }}"
+    password: "{{ certmanager_helm_repo_pass | default(omit) }}"
     state: present
-    url: "{{ helm_repo_url }}"
-    username: "{{ helm_repo_user | default(omit) }}"
+    url: "{{ certmanager_helm_repo_url }}"
+    username: "{{ certmanager_helm_repo_user | default(omit) }}"
 
 - name: Create Kubernetes namespace
   kubernetes.core.k8s:
@@ -31,10 +31,10 @@
     definition: "{{ certmanager_crd.content }}"
     kubeconfig: "{{ k8s_config | default(omit) }}"
 
-- name: Deploy helm chart
+- name: Deploy cert-manager to cluster using chart
   kubernetes.core.helm:
-    chart_ref: "{{ chart_ref }}"
-    chart_version: "{{ chart_version }}"
+    chart_ref: "{{ certmanager_chart_ref }}"
+    chart_version: "{{ certmanager_chart_version }}"
     context: "{{ k8s_context | default(omit) }}"
     kubeconfig: "{{ k8s_config | default(omit) }}"
     name: "{{ certmanager_name }}"
@@ -42,7 +42,6 @@
     update_repo_cache: true
     values: "{{ lookup('template', 'values.yaml.j2') | from_yaml }}"
     wait: true
-    state: absent
 
 - name: Configure self-signing certificate issuer
   kubernetes.core.k8s:
@@ -52,20 +51,57 @@
     kubeconfig: "{{ k8s_config | default(omit) }}"
   when: certmanager_issuer_selfsign
 
-- name: Determine if acme certificate issuer is needed
-  when: certmanager_issuer_acme
-  block:
-    - name: Configure DNS01 API token
-      kubernetes.core.k8s:
-        state: present
-        context: "{{ k8s_context | default(omit) }}"
-        definition: "{{ lookup('template', 'dns-acme-secret.yaml.j2') | from_yaml }}"
-        kubeconfig: "{{ k8s_config | default(omit) }}"
-      when: certmanager_acme_challenge == 'dns'
+- name: Retrieve External CA certificate
+  ansible.builtin.uri:
+    return_content: true
+    url: "{{ certmanager_external_certauth }}"
+  register: ca_cert
+  when: certmanager_external_certauth | length > 0
 
-    - name: Configure acme certificate issuer
-      kubernetes.core.k8s:
-        state: present
-        context: "{{ k8s_context | default(omit) }}"
-        definition: "{{ lookup('template', 'issuer-acme.yaml.j2') | from_yaml }}"
-        kubeconfig: "{{ k8s_config | default(omit) }}"
+- name: Configure DNS01 API token
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ k8s_context | default(omit) }}"
+    definition: "{{ lookup('template', 'dns-acme-secret.yaml.j2') | from_yaml }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+  loop: "{{ certmanager_acme_dns_secrets }}"
+  loop_control:
+    label: "item.name"
+  when:
+    - certmanager_acme_challenge == 'dns'
+    - certmanager_acme_dns_secrets | length > 0
+
+- name: Configure acme certificate issuer
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ k8s_context | default(omit) }}"
+    definition: "{{ lookup('template', 'issuer-acme.yaml.j2') |  from_yaml }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+  loop: "{{ certmanager_acme_issuers }}"
+  loop_control:
+    label: "item.name"
+  when: certmanager_acme_issuers | length > 0
+
+- name: Ensure Kubernetes namespace exists for certificate
+  kubernetes.core.k8s:
+    api_version: v1
+    context: "{{ k8s_context | default(omit) }}"
+    kind: namespace
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+    name: "{{ item.namespace }}"
+    state: present
+  loop: "{{ certmanager_certificates }} "
+  loop_control:
+    label: "{{ item.namespace }}"
+  when: certmanager_certificates | length > 0
+
+- name: Issue certificate
+  kubernetes.core.k8s:
+    state: present
+    context: "{{ k8s_context | default(omit) }}"
+    definition: "{{ lookup('template', 'certificate.yaml.j2') |  from_yaml }}"
+    kubeconfig: "{{ k8s_config | default(omit) }}"
+  loop: "{{ certmanager_certificates }} "
+  loop_control:
+    label: "{{ item.name }}"
+  when: certmanager_certificates | length > 0
